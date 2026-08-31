@@ -74,21 +74,21 @@ export default function DatabaseConsole({
     rawMessage?: string;
   } | null>(null);
   const [isExecutingSql, setIsExecutingSql] = useState(false);
-  const [dbStatus, setDbStatus] = useState<string>("Подключение к PostgreSQL...");
+  const [dbStatus, setDbStatus] = useState<string>("Подключение к SQLite...");
 
   useEffect(() => {
     fetch("/api/health")
       .then(res => res.json())
       .then(data => {
         if (data.status === "ok") {
-          setDbStatus("PostgreSQL (Cloud SQL Europe-West1) • Подключено");
+          setDbStatus("SQLite 3 (Локальный файл: archon_inventory.sqlite) • Подключено");
         } else {
           setDbStatus("Ошибка подключения к СУБД");
         }
       })
-      .catch(() => setDbStatus("Локальный режим"));
+      .catch(() => setDbStatus("SQLite 3 (Локальный режим)"));
 
-    executeUserSql("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;");
+    executeUserSql("SELECT name as table_name, type FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
   }, []);
 
   const sqlPresets = [
@@ -117,7 +117,7 @@ export default function DatabaseConsole({
       query: "SELECT number, title, category, priority, status, author, deadline_date, estimated_cost FROM service_memos ORDER BY created_at DESC;"
     },
     {
-      label: "📊 Сводная статистика количества строк в PostgreSQL",
+      label: "📊 Сводная статистика количества строк в SQLite",
       query: `SELECT 'computers' as "Таблица", count(*) as "Количество записей" FROM computers
 UNION ALL SELECT 'cartridge_models', count(*) FROM cartridge_models
 UNION ALL SELECT 'toner_tubs', count(*) FROM toner_tubs
@@ -150,7 +150,7 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
 
       const isMutation = /^(INSERT|UPDATE|DELETE|TRUNCATE|DROP|ALTER|CREATE)/i.test(sqlToRun);
       if (isMutation) {
-        onAddAuditLog("Выполнение PostgreSQL SQL", "info", `Выполнен запрос: ${sqlToRun.slice(0, 100)}...`);
+        onAddAuditLog("Выполнение SQLite SQL", "info", `Выполнен запрос: ${sqlToRun.slice(0, 100)}...`);
         // Refresh client data
         const [c, m, t, l, a] = await Promise.all([
           dbService.getComputers(),
@@ -164,18 +164,41 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
         onUpdateTonerTubs(t);
         onUpdateWeighingLogs(l);
         onUpdateAuditLogs(a);
-        setSuccessMsg(`Запрос успешно выполнен на PostgreSQL. Затронуто строк: ${res.rowCount}`);
+        setSuccessMsg(`Запрос успешно выполнен на SQLite 3. Затронуто строк: ${res.rowCount}`);
       }
     } catch (err: any) {
-      setErrorMsg(`Ошибка PostgreSQL: ${err.message || String(err)}`);
+      setErrorMsg(`Ошибка SQLite: ${err.message || String(err)}`);
       setSqlResults(null);
     } finally {
       setIsExecutingSql(false);
     }
   };
 
+  const handleSeedDatabase = async () => {
+    try {
+      await dbService.seedDefaultData();
+      const [c, m, t, l, a] = await Promise.all([
+        dbService.getComputers(),
+        dbService.getCartridgeModels(),
+        dbService.getTonerTubs(),
+        dbService.getWeighingLogs(),
+        dbService.getAuditLogs()
+      ]);
+      onUpdateComputers(c);
+      onUpdateCartridges(m);
+      onUpdateTonerTubs(t);
+      onUpdateWeighingLogs(l);
+      onUpdateAuditLogs(a);
+      onAddAuditLog("Заполнение базы данных", "success", "База данных SQLite наполнена эталонным парком ПК (включая Склад 1502, Бухгалтерию, Отдел продаж) и каталогом картриджей.");
+      setSuccessMsg("Эталонные данные успешно загружены в SQLite! Загружено компьютеров: " + c.length + ", картриджей: " + m.length);
+      executeUserSql("SELECT name as table_name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
+    } catch (err: any) {
+      setErrorMsg(`Ошибка загрузки данных: ${err.message}`);
+    }
+  };
+
   const handleResetAllTables = async () => {
-    if (!confirm("ВНИМАНИЕ! Вы действительно хотите очистить все таблицы базы данных PostgreSQL? Все элементы будут безвозвратно удалены.")) {
+    if (!confirm("ВНИМАНИЕ! Вы действительно хотите очистить все таблицы базы данных SQLite? Все элементы будут безвозвратно удалены.")) {
       return;
     }
 
@@ -186,9 +209,9 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
       onUpdateTonerTubs([]);
       onUpdateWeighingLogs([]);
       onUpdateAuditLogs([]);
-      onAddAuditLog("Очистка базы данных", "warning", "Все таблицы PostgreSQL очищены по запросу администратора.");
-      setSuccessMsg("Все таблицы PostgreSQL успешно очищены (TRUNCATE CASCADE). База данных полностью пуста.");
-      executeUserSql("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;");
+      onAddAuditLog("Очистка базы данных", "warning", "Все таблицы SQLite очищены по запросу администратора.");
+      setSuccessMsg("Все таблицы SQLite успешно очищены (DELETE). База данных полностью пуста.");
+      executeUserSql("SELECT name as table_name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
     } catch (err: any) {
       setErrorMsg(`Ошибка очистки базы данных: ${err.message}`);
     }
@@ -196,18 +219,18 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
 
   return (
     <div className="space-y-6 text-slate-100 animate-fade-in">
-      {/* Top Banner & PostgreSQL Connection Header */}
+      {/* Top Banner & SQLite Connection Header */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
             <Database className="h-6 w-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white tracking-tight font-display">Студия СУБД PostgreSQL (Cloud SQL)</h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                PostgreSQL 16
+              <h2 className="text-lg font-bold text-white tracking-tight font-display">Студия СУБД SQLite 3 (Локальная база)</h2>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                SQLite 3 / Embedded
               </span>
             </div>
             <p className="text-xs text-slate-400 font-mono mt-0.5">{dbStatus}</p>
@@ -216,9 +239,18 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={handleSeedDatabase}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20"
+            title="Заполнить базу эталонным парком ПК (Склад 1502, Бухгалтерия, Отдел продаж) и картриджами"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Заполнить парк и склад (Seed)
+          </button>
+
+          <button
             onClick={() => executeUserSql()}
             disabled={isExecutingSql}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-500/20"
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/20"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             Выполнить SQL
@@ -231,7 +263,7 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
               title="Очистить все таблицы базы данных"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Очистить все таблицы
+              Очистить таблицы
             </button>
           )}
         </div>
@@ -252,7 +284,7 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
               onClick={() => setActiveMode(tab.id as any)}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 isActive
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                  ? "bg-amber-600 text-white shadow-md shadow-amber-500/20"
                   : "text-slate-400 hover:text-white hover:bg-slate-900"
               }`}
             >
@@ -270,10 +302,10 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
           <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Code2 className="h-4 w-4 text-indigo-400" />
+                <Code2 className="h-4 w-4 text-amber-400" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white">Редактор SQL-запросов (DQL / DML)</h3>
               </div>
-              <span className="text-[10px] font-mono text-slate-500">PostgreSQL Dialect</span>
+              <span className="text-[10px] font-mono text-slate-500">SQLite 3 Dialect</span>
             </div>
 
             {/* Quick Presets */}
@@ -297,13 +329,13 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
 
             {/* Textarea */}
             <div className="flex-1 flex flex-col space-y-2">
-              <label className="text-[10px] text-slate-400 font-mono">SQL Запрос:</label>
+              <label className="text-[10px] text-slate-400 font-mono">SQLite Запрос:</label>
               <textarea
                 rows={6}
                 value={sqlInput}
                 onChange={(e) => setSqlInput(e.target.value)}
                 placeholder="SELECT * FROM computers WHERE status = 'OK';"
-                className="w-full font-mono text-xs bg-slate-950 border border-slate-800 rounded-2xl p-4 text-emerald-400 focus:outline-none focus:border-indigo-500 shadow-inner resize-y leading-relaxed"
+                className="w-full font-mono text-xs bg-slate-950 border border-slate-800 rounded-2xl p-4 text-amber-400 focus:outline-none focus:border-amber-500 shadow-inner resize-y leading-relaxed"
               />
             </div>
 
@@ -320,7 +352,7 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
             )}
 
             <div className="flex items-center justify-between pt-2">
-              <span className="text-[11px] text-slate-500 font-mono">Поддерживаются команды SELECT, INSERT, UPDATE, DELETE, TRUNCATE</span>
+              <span className="text-[11px] text-slate-500 font-mono">Поддерживаются команды SELECT, INSERT, UPDATE, DELETE, PRAGMA</span>
               <button
                 onClick={() => executeUserSql()}
                 disabled={isExecutingSql}
@@ -336,7 +368,7 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
           <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Table className="h-4 w-4 text-emerald-400" />
+                <Table className="h-4 w-4 text-amber-400" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white">Результат выполнения</h3>
               </div>
               {sqlResults && (
@@ -391,10 +423,10 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
             <div className="flex items-center gap-2">
-              <Table className="h-5 w-5 text-indigo-400" />
+              <Table className="h-5 w-5 text-amber-400" />
               <div>
-                <h3 className="text-sm font-bold text-white">Инспектор Таблиц PostgreSQL</h3>
-                <p className="text-[11px] text-slate-400">Просмотр и мониторинг наполнения таблиц в реальном времени.</p>
+                <h3 className="text-sm font-bold text-white">Инспектор Таблиц SQLite 3</h3>
+                <p className="text-[11px] text-slate-400">Просмотр и мониторинг наполнения локальной базы данных в реальном времени.</p>
               </div>
             </div>
 
@@ -414,7 +446,7 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     selectedTable === t.id
-                      ? "bg-indigo-600 text-white"
+                      ? "bg-amber-600 text-white"
                       : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
                   }`}
                 >
@@ -468,30 +500,30 @@ UNION ALL SELECT 'audit_logs', count(*) FROM audit_logs;`
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
-              <Layers className="h-5 w-5 text-indigo-400" />
-              <h3 className="text-sm font-bold text-white">Структура Схемы Таблиц PostgreSQL (Drizzle ORM)</h3>
+              <Layers className="h-5 w-5 text-amber-400" />
+              <h3 className="text-sm font-bold text-white">Структура Схемы Таблиц SQLite 3 (Drizzle ORM)</h3>
             </div>
-            <span className="text-xs font-mono text-emerald-400">11 Таблиц</span>
+            <span className="text-xs font-mono text-amber-400">11 Таблиц</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { name: "computers", fields: ["id (PK)", "name", "assigned_user_id", "os", "cpu", "ram", "storage", "ipv4", "mac", "status", "services (jsonb)"] },
+              { name: "computers", fields: ["id (PK)", "name", "assigned_user_id", "os", "cpu", "ram", "storage", "ipv4", "mac", "status", "services (JSON)"] },
               { name: "cartridge_models", fields: ["id (PK)", "name", "printer_model", "empty_weight", "full_weight", "toner_weight"] },
               { name: "toner_tubs", fields: ["id (PK)", "name", "brand", "capacity_grams", "remaining_grams", "color"] },
               { name: "weighing_logs", fields: ["id (PK)", "model_id", "model_name", "measured_weight", "fill_percentage", "date", "operator", "status", "notes"] },
               { name: "it_tickets", fields: ["id (PK)", "title", "description", "priority", "status", "category", "assignee", "requester", "department"] },
-              { name: "it_servers", fields: ["id (PK)", "name", "role", "ip", "os", "uptime", "cpu_usage", "ram_usage", "disk_usage", "ping_ms", "ports (jsonb)"] },
+              { name: "it_servers", fields: ["id (PK)", "name", "role", "ip", "os", "uptime", "cpu_usage", "ram_usage", "disk_usage", "ping_ms", "ports (JSON)"] },
               { name: "it_vlans", fields: ["id (PK)", "name", "subnet", "dhcp_scope", "gateway", "active_hosts", "purpose", "color"] },
               { name: "it_licenses", fields: ["id (PK)", "name", "vendor", "type", "used_seats", "total_seats", "expires_at", "status"] },
-              { name: "service_memos", fields: ["id (PK)", "number", "title", "category", "priority", "status", "author", "deadline_date", "attachments (jsonb)"] },
+              { name: "service_memos", fields: ["id (PK)", "number", "title", "category", "priority", "status", "author", "deadline_date", "attachments (JSON)"] },
               { name: "audit_logs", fields: ["id (PK)", "timestamp", "user", "role", "action", "type", "details", "ip"] },
               { name: "alert_settings", fields: ["id (PK)", "telegram_bot_token", "telegram_chat_id", "sms_api_url", "sms_api_key", "cpu_threshold", "temp_threshold"] }
             ].map(table => (
               <div key={table.name} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between border-b border-slate-850 pb-2">
-                  <strong className="text-xs font-mono font-bold text-indigo-400">{table.name}</strong>
-                  <span className="text-[10px] text-slate-500 font-mono">public</span>
+                  <strong className="text-xs font-mono font-bold text-amber-400">{table.name}</strong>
+                  <span className="text-[10px] text-slate-500 font-mono">sqlite</span>
                 </div>
                 <ul className="text-[11px] font-mono text-slate-400 space-y-1">
                   {table.fields.map((f, i) => (

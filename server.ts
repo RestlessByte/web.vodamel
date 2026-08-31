@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { db, pool } from "./src/db/index.ts";
+import { db, sqliteClient, initSqliteDatabase, seedDatabase } from "./src/db/index.ts";
 import * as schema from "./src/db/schema.ts";
 import { eq, desc } from "drizzle-orm";
 
@@ -9,16 +9,22 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Initialize SQLite database schema
+  await initSqliteDatabase();
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // --- API HEALTH & DB STATUS ---
   app.get("/api/health", async (req, res) => {
     try {
-      const client = await pool.connect();
-      await client.query("SELECT 1");
-      client.release();
-      res.json({ status: "ok", db: "connected", engine: "PostgreSQL" });
+      const result = await sqliteClient.execute("SELECT 1 as connected;");
+      res.json({
+        status: "ok",
+        db: "connected",
+        engine: "SQLite 3 (Local Database)",
+        file: "archon_inventory.sqlite"
+      });
     } catch (err: any) {
       res.status(500).json({ status: "error", error: err.message });
     }
@@ -426,7 +432,7 @@ async function startServer() {
 
   app.post("/api/alert-settings", async (req, res) => {
     try {
-      const body = { ...req.body, id: "default", updatedAt: new Date() };
+      const body = { ...req.body, id: "default", updatedAt: new Date().toISOString() };
       await db.insert(schema.alertSettings).values(body).onConflictDoUpdate({
         target: schema.alertSettings.id,
         set: body,
@@ -447,60 +453,80 @@ async function startServer() {
       }
 
       let sqlToExecute = query.trim();
-
-      // Support psql meta-commands (e.g. \dt, \d, \l, \dn, \du, \?, \conninfo)
       const lower = sqlToExecute.toLowerCase();
-      if (lower === "\\dt" || lower === "\\d" || lower.startsWith("\\dt ") || lower.startsWith("\\dt+")) {
-        sqlToExecute = "SELECT tablename as table_name, schemaname as schema, tableowner as owner FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;";
-      } else if (lower.startsWith("\\d ") || lower.startsWith("\\d+ ")) {
+
+      // Compatibility translation for meta commands & pg queries to SQLite
+      if (
+        lower === "\\dt" ||
+        lower === "\\d" ||
+        lower.startsWith("\\dt ") ||
+        lower === ".tables" ||
+        lower.includes("information_schema.tables")
+      ) {
+        sqlToExecute = "SELECT name as table_name, type, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;";
+      } else if (lower.startsWith("\\d ") || lower.startsWith(".schema ")) {
         const tableName = sqlToExecute.split(/\s+/)[1]?.replace(/['";]/g, "") || "computers";
-        sqlToExecute = `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${tableName}' ORDER BY ordinal_position;`;
-      } else if (lower === "\\l" || lower === "\\list" || lower.startsWith("\\l ")) {
-        sqlToExecute = "SELECT datname as database_name, pg_encoding_to_char(encoding) as encoding FROM pg_database WHERE datistemplate = false;";
-      } else if (lower.startsWith("\\du") || lower.startsWith("\\dg")) {
-        sqlToExecute = "SELECT usename as role_name, usesuper as is_superuser, usecreatedb as can_create_db FROM pg_user;";
-      } else if (lower.startsWith("\\dn")) {
-        sqlToExecute = "SELECT schema_name FROM information_schema.schemata;";
-      } else if (lower.startsWith("\\conninfo")) {
-        sqlToExecute = "SELECT current_database() as database, current_user as user, version() as pg_version;";
-      } else if (lower.startsWith("\\?") || lower === "\\h" || lower === "\\help") {
-        sqlToExecute = "SELECT tablename as public_table FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;";
+        sqlToExecute = `PRAGMA table_info('${tableName}');`;
+      } else if (lower === "\\conninfo" || lower === ".dbinfo") {
+        sqlToExecute = "SELECT 'SQLite 3 (Local Database)' as engine, 'archon_inventory.sqlite' as database_file, sqlite_version() as version;";
       }
 
-      const client = await pool.connect();
       const startTime = Date.now();
-      try {
-        const result = await client.query(sqlToExecute);
-        const duration = Date.now() - startTime;
-        res.json({
-          columns: result.fields ? result.fields.map(f => f.name) : [],
-          rows: result.rows || [],
-          rowCount: result.rowCount ?? (result.rows ? result.rows.length : 0),
-          command: result.command,
-          durationMs: duration
-        });
-      } finally {
-        client.release();
-      }
+      const result = await sqliteClient.execute(sqlToExecute);
+      const duration = Date.now() - startTime;
+
+      // Extract column names
+      const columns = result.columns || [];
+      const rows = (result.rows || []).map(row => {
+        if (Array.isArray(row)) {
+          const obj: Record<string, any> = {};
+          columns.forEach((col, idx) => {
+            obj[col] = row[idx];
+          });
+          return obj;
+        }
+        return row;
+      });
+
+      res.json({
+        columns,
+        rows,
+        rowCount: result.rowsAffected ?? rows.length,
+        durationMs: duration
+      });
     } catch (err: any) {
       console.error("POST /api/sql-query error:", err);
-      res.status(400).json({ error: err.message || "SQL syntax or execution error" });
+      res.status(400).json({ error: err.message || "SQLite execution error" });
+    }
+  });
+
+  // --- RE-SEED DEFAULT DATA ---
+  app.post("/api/seed", async (req, res) => {
+    try {
+      await seedDatabase();
+      res.json({ success: true, message: "База данных SQLite успешно заполнена эталонными данными парка и склада" });
+    } catch (err: any) {
+      console.error("POST /api/seed error:", err);
+      res.status(500).json({ error: err.message });
     }
   });
 
   // --- CLEAR / RESET ALL TABLES ---
   app.post("/api/reset-all", async (req, res) => {
     try {
-      const client = await pool.connect();
-      try {
-        await client.query(`
-          TRUNCATE TABLE computers, cartridge_models, toner_tubs, weighing_logs, 
-          it_tickets, it_servers, it_vlans, it_licenses, service_memos, audit_logs CASCADE;
-        `);
-        res.json({ success: true, message: "Все таблицы PostgreSQL успешно очищены" });
-      } finally {
-        client.release();
-      }
+      await sqliteClient.batch([
+        "DELETE FROM computers;",
+        "DELETE FROM cartridge_models;",
+        "DELETE FROM toner_tubs;",
+        "DELETE FROM weighing_logs;",
+        "DELETE FROM it_tickets;",
+        "DELETE FROM it_servers;",
+        "DELETE FROM it_vlans;",
+        "DELETE FROM it_licenses;",
+        "DELETE FROM service_memos;",
+        "DELETE FROM audit_logs;"
+      ]);
+      res.json({ success: true, message: "Все таблицы локальной базы данных SQLite успешно очищены" });
     } catch (err: any) {
       console.error("POST /api/reset-all error:", err);
       res.status(500).json({ error: err.message });
@@ -523,7 +549,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Archon IT Server (PostgreSQL) running on port ${PORT}`);
+    console.log(`Archon IT Server (SQLite 3 Local) running on port ${PORT}`);
   });
 }
 

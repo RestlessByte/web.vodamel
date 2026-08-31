@@ -258,7 +258,7 @@ export default function App() {
                 { id: "grafana", label: "Дашборд Grafana (CPU/RAM)", icon: Activity, color: "text-orange-500" },
                 { id: "alerts", label: "Калибровка API Оповещений", icon: Bell, color: "text-rose-500" },
                 { id: "audit", label: "Журнал аудита действий", icon: AuditLogView, color: "text-amber-400" },
-                { id: "database", label: "Студия СУБД (PostgreSQL)", icon: Database, color: "text-indigo-400" },
+                { id: "database", label: "Студия СУБД (SQLite 3)", icon: Database, color: "text-amber-400" },
                 { id: "docker", label: "Контейнеры Docker", icon: Server, color: "text-cyan-400" }
               ].map((tab) => {
                 const TabIcon = tab.id === "audit" ? ShieldAlert : tab.icon;

@@ -1,6 +1,6 @@
-import { pgTable, text, serial, integer, doublePrecision, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
-export const computers = pgTable("computers", {
+export const computers = sqliteTable("computers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   assignedUserId: text("assigned_user_id").notNull().default(""),
@@ -14,46 +14,46 @@ export const computers = pgTable("computers", {
   status: text("status").notNull().default("OK"),
   lastCheck: text("last_check").notNull().default(""),
   integrityHash: text("integrity_hash").notNull().default(""),
-  services: jsonb("services").notNull().default([]),
+  services: text("services", { mode: "json" }).notNull().default("[]"),
   department: text("department").default(""),
   subdepartment: text("subdepartment").default(""),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(""),
 });
 
-export const cartridgeModels = pgTable("cartridge_models", {
+export const cartridgeModels = sqliteTable("cartridge_models", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   printerModel: text("printer_model").notNull().default(""),
-  emptyWeight: doublePrecision("empty_weight").notNull().default(0),
-  fullWeight: doublePrecision("full_weight").notNull().default(0),
-  tonerWeight: doublePrecision("toner_weight").notNull().default(0),
-  createdAt: timestamp("created_at").defaultNow(),
+  emptyWeight: real("empty_weight").notNull().default(0),
+  fullWeight: real("full_weight").notNull().default(0),
+  tonerWeight: real("toner_weight").notNull().default(0),
+  createdAt: text("created_at").default(""),
 });
 
-export const tonerTubs = pgTable("toner_tubs", {
+export const tonerTubs = sqliteTable("toner_tubs", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   brand: text("brand").notNull().default(""),
-  capacityGrams: doublePrecision("capacity_grams").notNull().default(0),
-  remainingGrams: doublePrecision("remaining_grams").notNull().default(0),
+  capacityGrams: real("capacity_grams").notNull().default(0),
+  remainingGrams: real("remaining_grams").notNull().default(0),
   color: text("color").notNull().default("black"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(""),
 });
 
-export const weighingLogs = pgTable("weighing_logs", {
+export const weighingLogs = sqliteTable("weighing_logs", {
   id: text("id").primaryKey(),
   modelId: text("model_id").notNull().default(""),
   modelName: text("model_name").notNull().default(""),
-  measuredWeight: doublePrecision("measured_weight").notNull().default(0),
-  fillPercentage: doublePrecision("fill_percentage").notNull().default(0),
+  measuredWeight: real("measured_weight").notNull().default(0),
+  fillPercentage: real("fill_percentage").notNull().default(0),
   date: text("date").notNull().default(""),
   operator: text("operator").notNull().default(""),
   status: text("status").notNull().default("perfect"),
   notes: text("notes").default(""),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(""),
 });
 
-export const itTickets = pgTable("it_tickets", {
+export const itTickets = sqliteTable("it_tickets", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
@@ -67,24 +67,24 @@ export const itTickets = pgTable("it_tickets", {
   updatedAt: text("updated_at").notNull().default(""),
 });
 
-export const itServers = pgTable("it_servers", {
+export const itServers = sqliteTable("it_servers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   role: text("role").notNull().default(""),
   ip: text("ip").notNull().default(""),
   os: text("os").notNull().default(""),
   uptime: text("uptime").notNull().default(""),
-  cpuUsage: doublePrecision("cpu_usage").notNull().default(0),
-  ramUsage: doublePrecision("ram_usage").notNull().default(0),
-  diskUsage: doublePrecision("disk_usage").notNull().default(0),
-  pingMs: doublePrecision("ping_ms").notNull().default(0),
+  cpuUsage: real("cpu_usage").notNull().default(0),
+  ramUsage: real("ram_usage").notNull().default(0),
+  diskUsage: real("disk_usage").notNull().default(0),
+  pingMs: real("ping_ms").notNull().default(0),
   status: text("status").notNull().default("ONLINE"),
-  ports: jsonb("ports").notNull().default([]),
-  services: jsonb("services").notNull().default([]),
-  createdAt: timestamp("created_at").defaultNow(),
+  ports: text("ports", { mode: "json" }).notNull().default("[]"),
+  services: text("services", { mode: "json" }).notNull().default("[]"),
+  createdAt: text("created_at").default(""),
 });
 
-export const itVlans = pgTable("it_vlans", {
+export const itVlans = sqliteTable("it_vlans", {
   id: integer("id").primaryKey(),
   name: text("name").notNull(),
   subnet: text("subnet").notNull().default(""),
@@ -93,10 +93,10 @@ export const itVlans = pgTable("it_vlans", {
   activeHosts: integer("active_hosts").notNull().default(0),
   purpose: text("purpose").notNull().default(""),
   color: text("color").notNull().default("blue"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(""),
 });
 
-export const itLicenses = pgTable("it_licenses", {
+export const itLicenses = sqliteTable("it_licenses", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   vendor: text("vendor").notNull().default(""),
@@ -105,10 +105,10 @@ export const itLicenses = pgTable("it_licenses", {
   totalSeats: integer("total_seats").notNull().default(0),
   expiresAt: text("expires_at").notNull().default(""),
   status: text("status").notNull().default("ACTIVE"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(""),
 });
 
-export const serviceMemos = pgTable("service_memos", {
+export const serviceMemos = sqliteTable("service_memos", {
   id: text("id").primaryKey(),
   number: text("number").notNull(),
   title: text("title").notNull(),
@@ -123,17 +123,17 @@ export const serviceMemos = pgTable("service_memos", {
   createdDate: text("created_date").notNull().default(""),
   deadlineDate: text("deadline_date").notNull().default(""),
   notifyDaysBefore: integer("notify_days_before").notNull().default(15),
-  estimatedCost: doublePrecision("estimated_cost").notNull().default(0),
+  estimatedCost: real("estimated_cost").notNull().default(0),
   resolution: text("resolution").default(""),
   resolvedBy: text("resolved_by").default(""),
   resolvedDate: text("resolved_date").default(""),
-  attachments: jsonb("attachments").notNull().default([]),
-  comments: jsonb("comments").notNull().default([]),
-  tags: jsonb("tags").notNull().default([]),
-  createdAt: timestamp("created_at").defaultNow(),
+  attachments: text("attachments", { mode: "json" }).notNull().default("[]"),
+  comments: text("comments", { mode: "json" }).notNull().default("[]"),
+  tags: text("tags", { mode: "json" }).notNull().default("[]"),
+  createdAt: text("created_at").default(""),
 });
 
-export const auditLogs = pgTable("audit_logs", {
+export const auditLogs = sqliteTable("audit_logs", {
   id: text("id").primaryKey(),
   timestamp: text("timestamp").notNull(),
   user: text("user").notNull(),
@@ -142,17 +142,17 @@ export const auditLogs = pgTable("audit_logs", {
   type: text("type").notNull().default("info"),
   details: text("details").notNull(),
   ip: text("ip").notNull().default("127.0.0.1"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(""),
 });
 
-export const alertSettings = pgTable("alert_settings", {
+export const alertSettings = sqliteTable("alert_settings", {
   id: text("id").primaryKey().default("default"),
   telegramBotToken: text("telegram_bot_token").notNull().default(""),
   telegramChatId: text("telegram_chat_id").notNull().default(""),
   smsApiUrl: text("sms_api_url").notNull().default(""),
   smsApiKey: text("sms_api_key").notNull().default(""),
-  cpuThreshold: doublePrecision("cpu_threshold").notNull().default(85),
-  tempThreshold: doublePrecision("temp_threshold").notNull().default(75),
-  tonerTubThreshold: doublePrecision("toner_tub_threshold").notNull().default(20),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  cpuThreshold: real("cpu_threshold").notNull().default(85),
+  tempThreshold: real("temp_threshold").notNull().default(75),
+  tonerTubThreshold: real("toner_tub_threshold").notNull().default(20),
+  updatedAt: text("updated_at").default(""),
 });

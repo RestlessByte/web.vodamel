@@ -404,6 +404,14 @@ class ApiClientService {
       throw new Error("Failed to reset database");
     }
   }
+
+  // --- SEED DEFAULT DATA ---
+  public async seedDefaultData(): Promise<void> {
+    const res = await fetch("/api/seed", { method: "POST" });
+    if (!res.ok) {
+      throw new Error("Failed to seed database");
+    }
+  }
 }
 
 export const dbService = new ApiClientService();
