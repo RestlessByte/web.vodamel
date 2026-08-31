@@ -204,3 +204,26 @@ export interface ServiceMemo {
   comments: MemoComment[];
   tags: string[];
 }
+
+export type AdminAccountType = "eset" | "root" | "admin" | "Administrator" | "custom";
+
+export interface ParsedRemoteNode {
+  computerId: string;
+  computerName: string;
+  assignedUser: string;
+  department: string;
+  ipv4: string;
+  mac: string;
+  os: string;
+  detectedAdminAccount: AdminAccountType;
+  customAccountName?: string;
+  vncPort: number;
+  vncStatus: "AVAILABLE" | "PORT_OPEN" | "CONNECTING" | "AUTH_REQUIRED" | "OFFLINE";
+  sshWinrmStatus: "ONLINE" | "OFFLINE";
+  passwordStatus: "PENDING_UPDATE" | "ROTATED" | "VERIFIED" | "FAILED";
+  lastRotatedAt?: string;
+  currentPassword?: string;
+  generatedPassword?: string;
+  selected?: boolean;
+  pingMs: number;
+}

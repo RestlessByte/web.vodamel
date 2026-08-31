@@ -55,6 +55,7 @@ import {
 } from "../data";
 import { dbService } from "../services/apiClient";
 import ServiceMemosFolder from "./ServiceMemosFolder";
+import ITRemoteAutomationParser from "./ITRemoteAutomationParser";
 
 interface ITDepartmentDashboardProps {
   currentUserRole: UserRole;
@@ -72,7 +73,7 @@ export default function ITDepartmentDashboard({
   onAddAuditLog
 }: ITDepartmentDashboardProps) {
   // Navigation inside IT Dashboard
-  const [activeTab, setActiveTab] = useState<"overview" | "memos" | "infrastructure" | "tickets" | "licenses" | "terminal">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "parsing" | "memos" | "infrastructure" | "tickets" | "licenses" | "terminal">("overview");
   const [isDbReady, setIsDbReady] = useState(false);
 
   // State collections with PostgreSQL persistence
@@ -887,6 +888,7 @@ export default function ITDepartmentDashboard({
       <div className="flex items-center overflow-x-auto bg-slate-950 p-1 rounded-2xl border border-slate-850 gap-1 scrollbar-none">
         {[
           { id: "overview", label: "Обзор & Метрики", icon: Activity },
+          { id: "parsing", label: "Парсинг & TigerVNC", icon: Zap },
           { id: "memos", label: `Папка служебок & Файлы ${urgentMemosCount > 0 ? `(🔥 ${urgentMemosCount})` : `(${memos.length})`}`, icon: FileText },
           { id: "infrastructure", label: `Серверы & Топология VLAN (${servers.length}/${vlans.length})`, icon: Server },
           { id: "tickets", label: `Заявки Helpdesk (${inProgressTickets})`, icon: LifeBuoy },
@@ -912,6 +914,14 @@ export default function ITDepartmentDashboard({
         })}
       </div>
 
+      {/* TAB: PARSING & REMOTE AUTOMATION (TigerVNC Suite) */}
+      {activeTab === "parsing" && (
+        <ITRemoteAutomationParser
+          computers={computers}
+          onAddAuditLog={onAddAuditLog}
+        />
+      )}
+
       {/* TAB: SERVICE MEMOS FOLDER (СЭД & ФАЙЛЫ) */}
       {activeTab === "memos" && (
         <div className="animate-fade-in">
@@ -928,6 +938,32 @@ export default function ITDepartmentDashboard({
       {activeTab === "overview" && (
         <div className="space-y-6 animate-fade-in">
           
+          {/* TigerVNC & Parsing Highlight Banner */}
+          <div className="p-4 bg-gradient-to-r from-blue-950/70 via-slate-900 to-indigo-950/70 rounded-2xl border border-blue-500/30 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg shadow-blue-950/20">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-blue-500/20 border border-blue-500/40 rounded-xl text-blue-400">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                  <span>Парсинг & Удаленная автоматизация TigerVNC</span>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono border border-amber-500/30">
+                    [eset, root, admin]
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Централизованная смена паролей администратора на {computers.length} офисных ПК по локальной сети без физического обхода кабинетов.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab("parsing")}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-blue-500/20 shrink-0 cursor-pointer"
+            >
+              <Zap className="h-3.5 w-3.5" /> Открыть Парсинг & Ротацию
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Real-time Infrastructure Health Map */}
             <div className="lg:col-span-2 bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">

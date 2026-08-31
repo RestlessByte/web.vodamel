@@ -18,7 +18,8 @@ import {
   Database,
   Laptop,
   Folder,
-  FileText
+  FileText,
+  Zap
 } from "lucide-react";
 import {
   User,
@@ -54,6 +55,7 @@ import DockerGuide from "./components/DockerGuide";
 import DatabaseConsole from "./components/DatabaseConsole";
 import ITDepartmentDashboard from "./components/ITDepartmentDashboard";
 import ServiceMemosFolder from "./components/ServiceMemosFolder";
+import ParsingDashboard from "./components/ParsingDashboard";
 import { dbService } from "./services/apiClient";
 
 export default function App() {
@@ -248,6 +250,7 @@ export default function App() {
             <nav className="space-y-1">
               {[
                 { id: "computers", label: "Контроль и Спецификации ПК", icon: Monitor, color: "text-indigo-400" },
+                { id: "parsing", label: "Парсинг & TigerVNC (Админы)", icon: Zap, color: "text-amber-400" },
                 { id: "memos", label: "Папка служебок & Файлы (СЭД)", icon: Folder, color: "text-amber-400" },
                 { id: "it_department", label: "Дашборд IT-Отдела", icon: Laptop, color: "text-blue-400" },
                 { id: "toner", label: "Заправка весов & Картриджи", icon: Scale, color: "text-emerald-400" },
@@ -321,6 +324,14 @@ export default function App() {
               onUpdateComputers={handleUpdateComputers}
               onAddAuditLog={handleAddAuditLog}
               onOpenITDashboard={() => setCurrentTab("it_department")}
+            />
+          )}
+
+          {currentTab === "parsing" && (
+            <ParsingDashboard
+              computers={computers}
+              onAddAuditLog={handleAddAuditLog}
+              currentUserRole={currentUserRole}
             />
           )}
 
